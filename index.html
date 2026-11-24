@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Translator">
+<meta name="theme-color" content="#0f1115">
+<title>Live Translator</title>
+<style>
+  :root {
+    --bg: #0f1115; --card: #1a1d24; --line: #2a2f3a; --text: #f2f4f8; --dim: #9aa3b2;
+    --me: #2f7df6; --them: #18a058; --warn: #e0a100; --err: #e5484d;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  body { display: flex; flex-direction: column; padding: env(safe-area-inset-top) 14px env(safe-area-inset-bottom); }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 12px 0 8px; }
+  h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  .gear { background: none; border: 1px solid var(--line); color: var(--text); border-radius: 10px;
+    font-size: 15px; padding: 6px 12px; }
+
+  .langs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .langs label { font-size: 12px; color: var(--dim); display: block; margin-bottom: 4px; }
+  select, input { width: 100%; font-size: 16px; padding: 10px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--card); color: var(--text); }
+
+  #settings { display: none; margin-top: 10px; padding: 12px; border: 1px solid var(--line);
+    border-radius: 12px; background: var(--card); }
+  #settings.open { display: block; }
+  #settings .row { margin-bottom: 10px; }
+  #settings label { font-size: 12px; color: var(--dim); display: block; margin-bottom: 4px; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .seg button { padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg);
+    color: var(--text); font-size: 15px; }
+  .seg button.on { background: var(--me); border-color: var(--me); }
+  .hint { font-size: 12px; color: var(--dim); margin-top: 4px; line-height: 1.4; }
+
+  main { flex: 1; display: flex; flex-direction: column; margin-top: 12px; min-height: 0; }
+  .card { flex: 1; background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px; display: flex; flex-direction: column; overflow-y: auto; }
+  .who { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
+  #original { font-size: 17px; color: var(--dim); margin: 6px 0 14px; min-height: 22px; line-height: 1.35; }
+  #translation { font-size: 28px; font-weight: 600; line-height: 1.3; min-height: 36px; }
+  #status { font-size: 13px; color: var(--dim); margin-top: auto; padding-top: 12px; }
+  #status.warn { color: var(--warn); } #status.err { color: var(--err); }
+
+  #play { margin-top: 10px; width: 100%; padding: 14px; font-size: 18px; font-weight: 600;
+    border-radius: 12px; border: none; background: #ffffff; color: #0f1115; }
+  #play:disabled { opacity: .3; }
+
+  .talk { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0 14px; }
+  .hold { height: 130px; border-radius: 18px; border: none; color: #fff; font-size: 17px; font-weight: 700;
+    line-height: 1.3; touch-action: none; user-select: none; -webkit-user-select: none;
+    -webkit-touch-callout: none; transition: transform .08s, filter .08s; }
+  .hold small { display: block; font-weight: 500; font-size: 13px; opacity: .85; margin-top: 4px; }
+  #holdMe { background: var(--me); } #holdThem { background: var(--them); }
+  .hold.active { transform: scale(.96); filter: brightness(1.25); box-shadow: 0 0 0 4px rgba(255,255,255,.35) inset; }
+  .hold:disabled { opacity: .35; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Live Translator</h1>
+  <button class="gear" id="gearBtn">⚙ Settings</button>
+</header>
+
+<div class="langs">
+  <div><label for="myLang">My language</label><select id="myLang"></select></div>
+  <div><label for="theirLang">Their language</label><select id="theirLang"></select></div>
+</div>
+
+<div id="settings">
+  <div class="row">
+    <label>Translation engine</label>
+    <div class="seg">
+      <button id="engFree">Free (MyMemory)</button>
+      <button id="engPaid">Paid (Google)</button>
+    </div>
+  </div>
+  <div class="row" id="freeRow">
+    <label for="email">Email (optional, raises limit 5,000 → 50,000 characters/day)</label>
+    <input id="email" type="email" placeholder="you@example.com" autocomplete="email">
+  </div>
+  <div class="row" id="paidRow">
+    <label for="apiKey">Google Cloud Translation API key</label>
+    <input id="apiKey" type="password" placeholder="AIza..." autocomplete="off">
+    <div class="hint">Saved on this phone only. First 500,000 characters per month free, then US$20 per million.</div>
+  </div>
+</div>
+
+<main>
+  <div class="card">
+    <div class="who" id="who">Ready</div>
+    <div id="original">Hold a button below and speak.</div>
+    <div id="translation"></div>
+    <div id="status"></div>
+  </div>
+  <button id="play" disabled>▶ Play</button>
+</main>
+
+<div class="talk">
+  <button class="hold" id="holdMe">🎤 Hold — Me<small id="meLbl">English</small></button>
+  <button class="hold" id="holdThem">🎤 Hold — Them<small id="themLbl">Malay</small></button>
+</div>
+
+<script>
+// ---------- Language table ----------
+// speech: code for listening + speaking; tr: code for the translation services
+const LANGS = [
+  { name: "English",              speech: "en-US",  tr: "en" },
+  { name: "Malay",                speech: "ms-MY",  tr: "ms" },
+  { name: "Chinese (Mandarin)",   speech: "zh-CN",  tr: "zh-CN" },
+  { name: "Chinese (Taiwan)",     speech: "zh-TW",  tr: "zh-TW" },
+  { name: "Tamil",                speech: "ta-IN",  tr: "ta" },
+  { name: "Thai",                 speech: "th-TH",  tr: "th" },
+  { name: "Indonesian",           speech: "id-ID",  tr: "id" },
+  { name: "Vietnamese",           speech: "vi-VN",  tr: "vi" },
+  { name: "Filipino",             speech: "fil-PH", tr: "tl" },
+  { name: "Japanese",             speech: "ja-JP",  tr: "ja" },
+  { name: "Korean",               speech: "ko-KR",  tr: "ko" },
+  { name: "Hindi",                speech: "hi-IN",  tr: "hi" },
+  { name: "Arabic",               speech: "ar-SA",  tr: "ar" },
+  { name: "French",               speech: "fr-FR",  tr: "fr" },
+  { name: "German",               speech: "de-DE",  tr: "de" },
+  { name: "Spanish",              speech: "es-ES",  tr: "es" },
+  { name: "Italian",              speech: "it-IT",  tr: "it" },
+  { name: "Portuguese",           speech: "pt-BR",  tr: "pt" },
+  { name: "Russian",              speech: "ru-RU",  tr: "ru" },
+];
+
+// ---------- Settings (saved on this phone) ----------
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("lt_" + k); return v === null ? d : v; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem("lt_" + k, v); } catch (e) {} }
+};
+const $ = id => document.getElementById(id);
+const myLang = $("myLang"), theirLang = $("theirLang");
+
+LANGS.forEach((l, i) => {
+  myLang.add(new Option(l.name, i));
+  theirLang.add(new Option(l.name, i));
+});
+myLang.value = store.get("my", "0");       // English default
+theirLang.value = store.get("their", "1"); // Malay default
+$("email").value = store.get("email", "");
+$("apiKey").value = store.get("key", "");
+let engine = store.get("engine", "free");
+
+function refreshLabels() {
+  $("meLbl").textContent = LANGS[myLang.value].name;
+  $("themLbl").textContent = LANGS[theirLang.value].name;
+}
+function refreshEngine() {
+  $("engFree").classList.toggle("on", engine === "free");
+  $("engPaid").classList.toggle("on", engine === "paid");
+  $("freeRow").style.display = engine === "free" ? "" : "none";
+  $("paidRow").style.display = engine === "paid" ? "" : "none";
+}
+myLang.onchange = () => { store.set("my", myLang.value); refreshLabels(); };
+theirLang.onchange = () => { store.set("their", theirLang.value); refreshLabels(); };
+$("email").oninput = e => store.set("email", e.target.value.trim());
+$("apiKey").oninput = e => store.set("key", e.target.value.trim());
+$("engFree").onclick = () => { engine = "free"; store.set("engine", engine); refreshEngine(); };
+$("engPaid").onclick = () => { engine = "paid"; store.set("engine", engine); refreshEngine(); };
+$("gearBtn").onclick = () => $("settings").classList.toggle("open");
+refreshLabels(); refreshEngine();
+
+// ---------- Status line ----------
+function status(msg, kind) {
+  const s = $("status"); s.textContent = msg || ""; s.className = kind || "";
+}
+
+// ---------- Speech recognition (hold to talk) ----------
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (!SR) {
+  status("This browser can't listen. Use Safari on iPhone or Chrome on Android.", "err");
+  $("holdMe").disabled = true; $("holdThem").disabled = true;
+}
+
+let rec = null, heard = "", holding = false, turn = null, releasedAt = 0;
+
+function startListening(direction, btn) {
+  if (!SR || holding) return;
+  holding = true; heard = ""; turn = direction;
+  btn.classList.add("active");
+  const from = direction === "me" ? LANGS[myLang.value] : LANGS[theirLang.value];
+  const to   = direction === "me" ? LANGS[theirLang.value] : LANGS[myLang.value];
+  turn = { direction, from, to };
+
+  $("who").textContent = (direction === "me" ? "Me" : "Them") + " · " + from.name + " → " + to.name;
+  $("original").textContent = "Listening…";
+  $("translation").textContent = "";
+  $("play").disabled = true; $("play").textContent = "▶ Play";
+  status("");
+  try { speechSynthesis.cancel(); } catch (e) {}
+
+  rec = new SR();
+  rec.lang = from.speech;
+  rec.continuous = true;
+  rec.interimResults = true;
+  rec.onresult = ev => {
+    let text = "";
+    for (let i = 0; i < ev.results.length; i++) text += ev.results[i][0].transcript;
+    heard = text.trim();
+    $("original").textContent = heard || "Listening…";
+  };
+  rec.onerror = ev => {
+    if (ev.error === "not-allowed" || ev.error === "service-not-allowed")
+      status("Microphone blocked. Allow microphone for this page in your browser settings.", "err");
+    else if (ev.error === "no-speech") status("Didn't hear anything. Hold and speak again.", "warn");
+    else if (ev.error === "network") status("No internet for speech recognition.", "err");
+    else if (ev.error !== "aborted") status("Listening error: " + ev.error, "err");
+  };
+  rec.onend = () => {
+    if (holding) { // phone stopped listening on its own while still held
+      holding = false; btn.classList.remove("active"); releasedAt = performance.now();
+    }
+    finishTurn();
+  };
+  try { rec.start(); } catch (e) { status("Couldn't start the microphone.", "err"); }
+}
+
+function stopListening(btn) {
+  if (!holding) return;
+  holding = false;
+  btn.classList.remove("active");
+  releasedAt = performance.now();
+  $("original").textContent = heard || "…";
+  try { rec && rec.stop(); } catch (e) {}
+}
+
+let finished = false;
+function finishTurn() {
+  if (finished) return;
+  finished = true;
+  setTimeout(() => { finished = false; }, 300);
+  const text = heard;
+  if (!text) {
+    if (!$("status").textContent) status("Didn't catch that. Hold and speak again.", "warn");
+    $("original").textContent = "Hold a button below and speak.";
+    return;
+  }
+  $("original").textContent = text;
+  doTranslate(text, turn);
+}
+
+function bindHold(btn, direction) {
+  btn.addEventListener("pointerdown", e => { e.preventDefault(); btn.setPointerCapture && btn.setPointerCapture(e.pointerId); startListening(direction, btn); });
+  ["pointerup", "pointercancel"].forEach(t => btn.addEventListener(t, () => stopListening(btn)));
+  btn.addEventListener("contextmenu", e => e.preventDefault());
+}
+bindHold($("holdMe"), "me");
+bindHold($("holdThem"), "them");
+
+// ---------- Translation ----------
+async function translateFree(text, from, to) {
+  const email = store.get("email", "");
+  const url = "https://api.mymemory.translated.net/get?q=" + encodeURIComponent(text) +
+              "&langpair=" + encodeURIComponent(from.tr + "|" + to.tr) +
+              (email ? "&de=" + encodeURIComponent(email) : "");
+  const r = await fetch(url);
+  const j = await r.json();
+  const out = j && j.responseData && j.responseData.translatedText;
+  if (j.responseStatus != 200 || !out || /MYMEMORY WARNING/i.test(out))
+    throw new Error(j.responseDetails || out || "Free translation limit reached. Try again tomorrow or switch to Paid.");
+  return out;
+}
+
+async function translatePaid(text, from, to) {
+  const key = store.get("key", "");
+  if (!key) throw new Error("No Google API key. Open ⚙ Settings and paste your key.");
+  const r = await fetch("https://translation.googleapis.com/language/translate/v2?key=" + encodeURIComponent(key), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ q: text, source: from.tr, target: to.tr, format: "text" })
+  });
+  const j = await r.json();
+  if (!r.ok || j.error) throw new Error((j.error && j.error.message) || ("Google error " + r.status));
+  return j.data.translations[0].translatedText;
+}
+
+let lastResult = null;
+async function doTranslate(text, t) {
+  if (!navigator.onLine) { status("No internet. Check mobile data.", "err"); return; }
+  $("translation").textContent = "Translating…";
+  const t0 = performance.now();
+  try {
+    const out = engine === "paid" ? await translatePaid(text, t.from, t.to)
+                                  : await translateFree(text, t.from, t.to);
+    const t1 = performance.now();
+    $("translation").textContent = out;
+    lastResult = { text: out, lang: t.to.speech };
+    $("play").disabled = false; $("play").textContent = "▶ Play";
+    const total = ((t1 - releasedAt) / 1000).toFixed(2);
+    const tr = ((t1 - t0) / 1000).toFixed(2);
+    status("Ready in " + total + " s after release (translation " + tr + " s) · " + (engine === "paid" ? "Google" : "MyMemory"));
+    checkVoice(t.to);
+  } catch (e) {
+    $("translation").textContent = "";
+    status(e.message || "Translation failed.", "err");
+  }
+}
+
+// ---------- Speaking (waits for tap) ----------
+function pickVoice(lang) {
+  const voices = speechSynthesis.getVoices();
+  const base = lang.split("-")[0].toLowerCase();
+  return voices.find(v => v.lang.toLowerCase() === lang.toLowerCase()) ||
+         voices.find(v => v.lang.toLowerCase().replace("_", "-").startsWith(base)) || null;
+}
+function checkVoice(lang) {
+  const voices = speechSynthesis.getVoices();
+  if (voices.length && !pickVoice(lang.speech))
+    status($("status").textContent + " · No " + lang.name + " voice on this phone (iPhone: Settings › Accessibility › Spoken Content › Voices).", "warn");
+}
+try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => {}; } catch (e) {}
+
+$("play").onclick = () => {
+  if (!lastResult) return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(lastResult.text);
+    u.lang = lastResult.lang;
+    const v = pickVoice(lastResult.lang);
+    if (v) u.voice = v;
+    u.rate = 0.95;
+    speechSynthesis.speak(u);
+    $("play").textContent = "🔁 Replay";
+  } catch (e) { status("This phone can't speak the translation.", "err"); }
+};
+</script>
+</body>
+</html>
